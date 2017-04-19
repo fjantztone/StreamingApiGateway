@@ -1,4 +1,5 @@
 const fetch = require('node-fetch');
+const moment = require('moment');
 const baseUrl = 'http://localhost:8081/api/cache';
 const CacheConfig = require('../models/CacheConfig');
 const caches = {};
@@ -96,10 +97,23 @@ module.exports = (io) => {
     putKey : (req, res, next) => {
       const name = req.params.name;
       const key = req.body; //must convert to json
-      CacheConfig.findOneAndUpdate({name : name}, {$push : {data : key}})
+      CacheConfig.findOne({name : name})
+      .then(cacheConfig => {
+        console.log(cacheConfig);
+        if(!cacheConfig)
+          throw new Error("No cache config was found with that name.");
+
+        const expireDays = cacheConfig.expireDays;
+        const data = {};
+        data.key = key;
+        data.expireAt = moment().add(expireDays, 'days').format();
+        
+        return cacheConfig.update({$push : {data : data}}, {runValidators : true});
+
+      })
       .then(cacheConfig => {
         if(!cacheConfig)
-          throw new Error("Key could not be inserted into database..");
+          throw new Error("Key could not be inserted into cache..");
         return fetch(baseUrl + '/' + name, {
           method : 'POST',
           body : JSON.stringify(key)
@@ -113,7 +127,57 @@ module.exports = (io) => {
         if(status !== 200)
           throw new Error(json.message);
 
-        CacheController.emitKey(name, json);
+        CacheController.emitKeys(name, json);
+        res.json(json);
+      })
+      .catch(err => {
+        res.status(400).json(err.message);
+      });
+    },
+    getEntry : (req, res, next) => {
+      ///:name/filter/points/startdate/:startdate/enddate/:enddate/key/:key
+      const name = req.params.name;
+      const startDate = req.params.startdate;
+      const endDate = req.params.enddate;
+      const key = req.params.key;
+      const filter = req.params.filter;
+
+      fetch(baseUrl + '/' + name + '/filter/' + filter + '/startdate/' + startDate + '/enddate/' + endDate + '/key/' + key)
+      .then(res => res.json().then(json => ({
+        status : res.status,
+        json : json
+      })))
+      .then(({status, json}) => {
+        if(status !== 200)
+          throw new Error(json.message);
+
+        res.json(json);
+      })
+      .catch(err => {
+        res.status(400).json(err.message);
+      });
+
+    },
+    getPointsEntry : (req, res, next) => {
+      req.params.filter = 'points';
+      return CacheController.getEntry(req, res, next);
+    },
+    getRangeEntry : (req, res, next) => {
+      req.params.filter = 'range';
+      return CacheController.getEntry(req, res, next);
+    },
+    getTopEntry : (req, res, next) => {
+      const name = req.params.name;
+      const days = req.params.days;
+      fetch(baseUrl + '/' + name + '/filter/top/days/' + days)
+      .then(res => res.json().then(json => ({
+        status : res.status,
+        json : json
+      })))
+      .then(({status, json}) => {
+        if(status !== 200)
+          throw new Error(json.message);
+
         res.json(json);
       })
       .catch(err => {
@@ -151,16 +215,15 @@ module.exports = (io) => {
       console.log("disconnect!");
       console.log(caches);
     },
-    emitKey : (room, attributes) => {
-      console.log("EMIT key");
+    emitKeys : (room, attributes) => {
+      console.log("EMITTING KEYS TO SUBSCRIBERS!");
       if(caches.hasOwnProperty(room)){ //only emit if exists
         let cacheRoom = caches[room];
         key = attributes.map(attribute => JSON.stringify(attribute.key));
         for(let attribute of Object.keys(cacheRoom)){
           //if attribute is subset of key
           //propagate to all sockets there
-          console.log("IS " + attribute + " IN " + key);
-          const index = key.indexOf(attribute); //lazy compare right now. should probably sort the object's keys.
+          const index = key.indexOf(attribute); //lazy compare right now. should probably sort the object's keys etc.
           if(index != -1){
             const ids = cacheRoom[attribute];
             const data = attributes[index];

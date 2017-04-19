@@ -4,6 +4,7 @@ const Schema = mongoose.Schema;
 
 let keySchema = new Schema({
   expireAt : {type : Date, required: true},
+  createdAt : {type : Schema.Types.String, default : moment().format(), required:true},
   key : Schema.Types.Object
 }, {versionKey : false});
 
@@ -26,7 +27,7 @@ let cacheSchema = new Schema({
     }},
     attributes : {type : [Schema.Types.String], required : [true, 'Attributes must exist.']},
     levels : {type : [[]], required : [true, 'One level must exist.']}, //levels should be validated against fields
-    createDate : {type : Schema.Types.String, default : moment().format()},
+    createdAt : {type : Schema.Types.String, default : moment().format(), required:true},
     data: [keySchema]
 }, {versionKey : false});
 

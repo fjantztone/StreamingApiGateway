@@ -6,6 +6,10 @@ module.exports = (app, io) => {
   app.get('/api/cache/:name', CacheController.getCache);
   app.post('/api/cache/:name', CacheController.putKey);
 
+  app.get('/api/cache/:name/filter/points/startdate/:startdate/enddate/:enddate/key/:key', CacheController.getPointsEntry);
+  app.get('/api/cache/:name/filter/range/startdate/:startdate/enddate/:enddate/key/:key', CacheController.getRangeEntry);
+  app.get('/api/cache/:name/filter/top/days/:days', CacheController.getTopEntry);
+
   io.on('connection', (socket) => {
     socket.on('join', (data) => {
       const room = data.room;
@@ -21,3 +25,5 @@ module.exports = (app, io) => {
   });
 
 }
+
+///testar/filter/points/startdate/2017-04-17/enddate/2017-04-17/key/{"ITEM" : "halebop", "RETAIELR" : "1234"}
